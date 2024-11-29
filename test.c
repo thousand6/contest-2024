@@ -17,12 +17,11 @@ static unsigned char *gen_rand_string()
 int main(int argc, char const *argv[])
 {
     rax *rt = raxNew();
-    for (int i = 0; i < 500000; i++)
+    for (int i = 0; i < 5000000; i++)
     {
         unsigned char *s = gen_rand_string();
         raxInsertNum(rt, s, 128, rand() % 500);
     }
-    printf("insert finish");
     raxIterator iter;
     raxStart(&iter, rt);
     raxSeek(&iter,"^",(unsigned char*)NULL,1);
