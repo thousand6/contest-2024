@@ -252,15 +252,15 @@ void raxAddNum(raxNode *n, int num) {
 }
 
 void raxInitGroup(raxNode *n, int num) {
-    Group **ndata = (Group**)
+    n->iskey = 1;
+    void **ndata = (void**)
             ((char*)n+raxNodeCurrentLength(n)-sizeof(void*));
     Group *p = rax_malloc(sizeof(Group));
     p->count = 1;
     p->sum = num;
     p->max = num;
     p->min = num;
-    memcpy(&ndata, p, sizeof(p));
-    n->iskey = 1;
+    memcpy(ndata,&p,sizeof(p));
 }
 
 /* Get the node auxiliary data. */
@@ -751,6 +751,8 @@ int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num) {
         if (j == 0) {
             /* 3a: Replace the old node with the split node. */
             if (h->iskey) {
+                void *ndata = raxGetData(h);
+                raxSetData(splitnode,ndata);
                 raxAddNum(splitnode,num);
             }
             memcpy(parentlink,&splitnode,sizeof(splitnode));
@@ -762,6 +764,8 @@ int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num) {
             trimmed->iskey = h->iskey;
             trimmed->isnull = h->isnull;
             if (h->iskey && !h->isnull) {
+                void *ndata = raxGetData(h);
+                raxSetData(splitnode,ndata);
                 raxAddNum(splitnode,num);
             }
             raxNode **cp = raxNodeLastChildPtr(trimmed);
@@ -844,6 +848,8 @@ int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num) {
         memcpy(trimmed->data,h->data,j);
         memcpy(parentlink,&trimmed,sizeof(trimmed));
         if (h->iskey) {
+            void *aux = raxGetData(h);
+            raxSetData(trimmed,aux);
             raxAddNum(trimmed,num);
         }
 
