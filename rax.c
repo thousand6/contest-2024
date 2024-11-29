@@ -545,7 +545,7 @@ int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num) {
     if (i == len && (!h->iscompr || j == 0 /* not in the middle if j is 0 */)) {
         debugf("### Insert: node representing key exists\n");
         /* Make space for the value pointer if needed. */
-        if (!h->iskey || (h->isnull)) {
+        if (!h->iskey) {
             h = raxRealloc(h);
             if (h) memcpy(parentlink,&h,sizeof(h));
         }
@@ -713,7 +713,7 @@ int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num) {
         /* Set the length of the additional nodes we will need. */
         size_t trimmedlen = j;
         size_t postfixlen = h->size - j - 1;
-        int split_node_is_key = !trimmedlen && h->iskey && !h->isnull;
+        int split_node_is_key = !trimmedlen && h->iskey;
         size_t nodesize;
 
         /* 2: Create the split node. Also allocate the other nodes we'll need
@@ -763,7 +763,7 @@ int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num) {
             trimmed->iscompr = j > 1 ? 1 : 0;
             trimmed->iskey = h->iskey;
             trimmed->isnull = h->isnull;
-            if (h->iskey && !h->isnull) {
+            if (h->iskey) {
                 void *ndata = raxGetData(h);
                 raxSetData(splitnode,ndata);
                 raxAddNum(splitnode,num);
@@ -801,70 +801,7 @@ int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num) {
          * inserted key). */
         rax_free(h);
         h = splitnode;
-    } else if (h->iscompr && i == len) {
-    /* ------------------------- ALGORITHM 2 --------------------------- */
-        debugf("ALGO 2: Stopped at compressed node %.*s (%p) j = %d\n",
-            h->size, h->data, (void*)h, j);
-
-        /* Allocate postfix & trimmed nodes ASAP to fail for OOM gracefully. */
-        size_t postfixlen = h->size - j;
-        size_t nodesize = sizeof(raxNode)+postfixlen+raxPadding(postfixlen)+
-                          sizeof(raxNode*);
-        nodesize += sizeof(void*);
-        raxNode *postfix = rax_malloc(nodesize);
-
-        nodesize = sizeof(raxNode)+j+raxPadding(j)+sizeof(raxNode*);
-        if (h->iskey && !h->isnull) nodesize += sizeof(void*);
-        raxNode *trimmed = rax_malloc(nodesize);
-
-        if (postfix == NULL || trimmed == NULL) {
-            rax_free(postfix);
-            rax_free(trimmed);
-            errno = ENOMEM;
-            return 0;
-        }
-
-        /* 1: Save next pointer. */
-        raxNode **childfield = raxNodeLastChildPtr(h);
-        raxNode *next;
-        memcpy(&next,childfield,sizeof(next));
-
-        /* 2: Create the postfix node. */
-        postfix->size = postfixlen;
-        postfix->iscompr = postfixlen > 1;
-        postfix->iskey = 1;
-        postfix->isnull = 0;
-        memcpy(postfix->data,h->data+j,postfixlen);
-        raxInitGroup(postfix,num);
-        raxNode **cp = raxNodeLastChildPtr(postfix);
-        memcpy(cp,&next,sizeof(next));
-        rax->numnodes++;
-
-        /* 3: Trim the compressed node. */
-        trimmed->size = j;
-        trimmed->iscompr = j > 1;
-        trimmed->iskey = 0;
-        trimmed->isnull = 0;
-        memcpy(trimmed->data,h->data,j);
-        memcpy(parentlink,&trimmed,sizeof(trimmed));
-        if (h->iskey) {
-            void *aux = raxGetData(h);
-            raxSetData(trimmed,aux);
-            raxAddNum(trimmed,num);
-        }
-
-        /* Fix the trimmed node child pointer to point to
-         * the postfix node. */
-        cp = raxNodeLastChildPtr(trimmed);
-        memcpy(cp,&postfix,sizeof(postfix));
-
-        /* Finish! We don't need to continue with the insertion
-         * algorithm for ALGO 2. The key is already inserted. */
-        rax->numele++;
-        rax_free(h);
-        return 1; /* Key inserted. */
-    }
-
+    } 
     /* We walked the radix tree as far as we could, but still there are left
      * chars in our string. We need to insert the missing nodes. */
     while(i < len) {
@@ -900,8 +837,10 @@ int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num) {
     raxNode *newh = raxRealloc(h);
     if (newh == NULL) goto oom;
     h = newh;
-    if (!h->iskey) rax->numele++;
-    raxInitGroup(h,num);
+    if (!h->iskey) {
+        rax->numele++;
+        raxInitGroup(h, num);
+    } else raxAddNum(h,num);
     memcpy(parentlink,&h,sizeof(h));
     return 1; /* Element inserted. */
 
