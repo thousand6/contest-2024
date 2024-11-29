@@ -9,7 +9,7 @@ static unsigned char *gen_rand_string()
     unsigned char *res = malloc(128 * sizeof(char));
     for (int i = 0; i < 128; i++)
     {
-        res[i] = c[rand() % 62];
+        res[i] = c[rand() % 10];
     }
     return res;
 }
@@ -20,8 +20,9 @@ int main(int argc, char const *argv[])
     for (int i = 0; i < 500000; i++)
     {
         unsigned char *s = gen_rand_string();
-        raxInsert(rt, s, 128, NULL, NULL);
+        raxInsertNum(rt, s, 128, rand() % 500);
     }
+    printf("insert finish");
     raxIterator iter;
     raxStart(&iter, rt);
     raxSeek(&iter,"^",(unsigned char*)NULL,1);
