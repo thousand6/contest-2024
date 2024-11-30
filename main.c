@@ -1,4 +1,8 @@
 #include <stdlib.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
 #include "rax.h"
 #include "contest.h"
 
@@ -29,10 +33,34 @@ int processPartData(unsigned char *leftBound)
 {
     rax *rt = raxNew();
 
+    char *file = "measurements.txt";
+
+    int fd = open(file, O_RDONLY);
+    if (!fd)
+    {
+        perror("error opening file");
+        exit(EXIT_FAILURE);
+    }
+
+    struct stat sb;
+    if (fstat(fd, &sb) == -1)
+    {
+        perror("error getting file size");
+        exit(EXIT_FAILURE);
+    }
+
+    // mmap entire file into memory
+    size_t sz = (size_t)sb.st_size;
+    const char *data = mmap(NULL, sz, PROT_READ, MAP_SHARED, fd, 0);
+    if (data == MAP_FAILED)
+    {
+        perror("error mmapping file");
+        exit(EXIT_FAILURE);
+    }
 
     raxIterator iter;
     raxStart(&iter, rt);
-    raxSeek(&iter,"^",(unsigned char*)NULL,1);
+    raxSeek(&iter, "^", (unsigned char *)NULL, 1);
 
     int numele = rt->numele;
     raxFree(rt);
