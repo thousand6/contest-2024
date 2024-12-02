@@ -34,6 +34,11 @@ int main(int argc, char const *argv[])
     {
         printf("key: %s, mean: %ld, max: %d, min: %d\n", (char*)iter.key, ((Group*)iter.data)->sum / ((Group*)iter.data)->count, ((Group*)iter.data)->max, ((Group*)iter.data)->min);
     }
+    raxSeek(&iter,"$",(unsigned char*)NULL,1);
+    while (raxPrev(&iter))
+    {
+        printf("key: %s, mean: %ld, max: %d, min: %d\n", (char*)iter.key, ((Group*)iter.data)->sum / ((Group*)iter.data)->count, ((Group*)iter.data)->max, ((Group*)iter.data)->min);
+    }
     raxStop(&iter);
     // getchar();
     return 0;

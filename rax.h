@@ -28,6 +28,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+* 在原始项目的基础上，增加了一个函数，删除了用不到的函数
+* 原始项目地址：https://github.com/antirez/rax
+*/
+
 #ifndef RAX_H
 #define RAX_H
 
