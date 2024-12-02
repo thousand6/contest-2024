@@ -37,7 +37,7 @@ static inline char *parse_number(int *dest, char *s)
     }
 }
 
-int openFile(char *file)
+static inline int openFile(char *file)
 {
     int fd = open(file, O_RDONLY);
     if (!fd)
@@ -48,7 +48,7 @@ int openFile(char *file)
     return fd;
 }
 
-void mapFile(int fd, char **data, size_t *sz)
+static inline void mapFile(int fd, char **data, size_t *sz)
 {
     struct stat sb;
     if (fstat(fd, &sb) == -1)
@@ -67,13 +67,13 @@ void mapFile(int fd, char **data, size_t *sz)
     }
 }
 
-void cleanup(int fd, char *data, size_t sz)
+static inline void cleanup(int fd, char *data, size_t sz)
 {
     munmap(data, sz);
     close(fd);
 }
 
-void doProcess(char *start, char *data, rax *rt, raxIterator *iter)
+static void doProcess(char *start, char *data, rax *rt, raxIterator *iter)
 {
     while (*data != 0x0)
     {
@@ -114,7 +114,7 @@ void doProcess(char *start, char *data, rax *rt, raxIterator *iter)
     }
 }
 
-int resultToBuf(char *buf, raxIterator *iter)
+static int resultToBuf(char *buf, raxIterator *iter)
 {
     int len = 0;
     while (raxNext(iter))
@@ -131,7 +131,7 @@ int resultToBuf(char *buf, raxIterator *iter)
     return len;
 }
 
-void outputResult(raxIterator *iter)
+static void outputResult(raxIterator *iter)
 {
     FILE *file = fopen("/mnt/d/output-larry.txt", "a");
     raxSeek(iter, "^", (unsigned char *)NULL, 0);
@@ -145,7 +145,7 @@ void outputResult(raxIterator *iter)
     fclose(file);
 }
 
-int process(char *start)
+static int process(char *start)
 {
     rax *rt = raxNew();
     raxIterator iter;
@@ -165,10 +165,8 @@ int process(char *start)
     // mapFile(fd, &data, &sz);
     // doProcess(start, data, rt, &iter);
     // cleanup(fd, data, sz);
-// raxStart(&iter, rt);
     outputResult(&iter);
 
-    // raxStart(&iter, rt);
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);
     memcpy(start, iter.key, 128);
