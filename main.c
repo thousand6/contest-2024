@@ -13,7 +13,8 @@
 #include "rax.h"
 #include "contest.h"
 
-#define MAX_KEY_CAPABILITY 2
+#define MAX_KEY_CAPABILITY 50
+#define BUF_LEN (1 << 10) * 16
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
@@ -22,17 +23,17 @@ static inline char *parse_number(int *dest, char *s)
     if (s[1] == '.')
     {
         *dest = s[0] * 10 + s[2] - ('0' * 11);
-        return s + 5;
+        return s + 4;
     }
     if (s[2] == '.')
     {
         *dest = s[0] * 100 + s[1] * 10 + s[3] - ('0' * 111);
-        return s + 6;
+        return s + 5;
     }
     if (s[3] == '.')
     {
         *dest = s[0] * 1000 + s[1] * 100 + s[2] * 10 + s[4] - ('0' * 1111);
-        return s + 7;
+        return s + 6;
     }
 }
 
@@ -113,13 +114,35 @@ void doProcess(char *start, char *data, rax *rt, raxIterator *iter)
     }
 }
 
-void outputResult(raxIterator *iter)
+int resultToBuf(char *buf, raxIterator *iter)
 {
-    raxSeek(iter, "^", (unsigned char *)NULL, 0);
+    int len = 0;
     while (raxNext(iter))
     {
-       printf("key: %.*s, mean: %.1f, max: %.1f, min: %.1f\n", (int)iter->key_len, (char*)iter->key, (float)((Group*)iter->data)->sum / (float)((Group*)iter->data)->count / 10.0, (float)((Group*)iter->data)->max / 10.0, (float)((Group*)iter->data)->min / 10.0);
+        int n = sprintf(buf, "%.*s:%.1f/%.1f/%.1f\n", (int)iter->key_len, (char *)iter->key, (float)((Group *)iter->data)->min / 10.0,
+                        (float)((Group *)iter->data)->sum / (float)((Group *)iter->data)->count / 10.0, (float)((Group *)iter->data)->max / 10.0);
+        len += n;
+        buf += n;
+        if (len + 200 >= BUF_LEN)
+        {
+            return len;
+        }
     }
+    return len;
+}
+
+void outputResult(raxIterator *iter)
+{
+    FILE *file = fopen("/mnt/d/output-larry.txt", "a");
+    raxSeek(iter, "^", (unsigned char *)NULL, 0);
+    char buf[BUF_LEN];
+    int len = resultToBuf(buf, iter);
+    do
+    {
+        fwrite(buf, len, 1, file);
+    } while (resultToBuf(buf, iter));
+
+    fclose(file);
 }
 
 int process(char *start)
@@ -131,20 +154,21 @@ int process(char *start)
     size_t sz;
     char *data;
 
-    char *file = "/mnt/d/data1.txt";
+    char *file = "/mnt/d/downloads/data1.txt";
     int fd = openFile(file);
     mapFile(fd, &data, &sz);
     doProcess(start, data, rt, &iter);
     cleanup(fd, data, sz);
 
-    file = "/mnt/d/data1.txt";
-    fd = openFile(file);
-    mapFile(fd, &data, &sz);
-    doProcess(start, data, rt, &iter);
-    cleanup(fd, data, sz);
-
+    // file = "/mnt/d/data1.txt";
+    // fd = openFile(file);
+    // mapFile(fd, &data, &sz);
+    // doProcess(start, data, rt, &iter);
+    // cleanup(fd, data, sz);
+// raxStart(&iter, rt);
     outputResult(&iter);
 
+    // raxStart(&iter, rt);
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);
     memcpy(start, iter.key, 128);
