@@ -16,24 +16,28 @@
 #define BUF_LEN (1 << 10) * 64
 
 unsigned char c[62] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
+FILE *files[62];
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
-static inline char *parse_number(int *dest, char *s)
+static inline char *parse_number(int *dest, int *len, char *s)
 {
     if (s[1] == '.')
     {
         *dest = s[0] * 10 + s[2] - ('0' * 11);
+        *len = 3;
         return s + 4;
     }
     if (s[2] == '.')
     {
         *dest = s[0] * 100 + s[1] * 10 + s[3] - ('0' * 111);
+        *len = 4;
         return s + 5;
     }
     if (s[3] == '.')
     {
         *dest = s[0] * 1000 + s[1] * 100 + s[2] * 10 + s[4] - ('0' * 1111);
+        *len = 5;
         return s + 6;
     }
 }
@@ -74,16 +78,16 @@ static inline void cleanup(int fd, char *data, size_t sz)
     close(fd);
 }
 
-static void doProcess(char *data, rax *rt, raxIterator *iter)
-{
-    while (*data != 0x0)
-    {
-        int measurement;
-        char *old = data;
-        data = parse_number(&measurement, data + 129);
-        raxInsertNum(rt, old, 128, measurement);
-    }
-}
+// static void doProcess(char *data, rax *rt, raxIterator *iter)
+// {
+//     while (*data != 0x0)
+//     {
+//         int measurement;
+//         char *old = data;
+//         data = parse_number(&measurement, data + 129);
+//         raxInsertNum(rt, old, 128, measurement);
+//     }
+// }
 
 static int resultToBuf(char *buf, raxIterator *iter)
 {
@@ -121,49 +125,7 @@ static void outputResult(raxIterator *iter)
     fclose(file);
 }
 
-static void splitFile(char *data)
-{
-    while (*data != 0x0)
-    {
-        int measurement;
-        char *old = data;
-        data = parse_number(&measurement, data + 129);
-    }
-}
-
-static int process(char *start)
-{
-    rax *rt = raxNew();
-    raxIterator iter;
-    raxStart(&iter, rt);
-
-    size_t sz;
-    char *data;
-
-    char *file = "/app/data/data1.txt";
-    int fd = openFile(file);
-    mapFile(fd, &data, &sz);
-    doProcess(data, rt, &iter);
-    cleanup(fd, data, sz);
-
-    file = "/app/data/data2.txt";
-    fd = openFile(file);
-    mapFile(fd, &data, &sz);
-    doProcess(data, rt, &iter);
-    cleanup(fd, data, sz);
-
-    outputResult(&iter);
-
-    raxSeek(&iter, "$", (unsigned char *)NULL, 0);
-    raxPrev(&iter);
-    memcpy(start, iter.key, 128);
-    raxStop(&iter);
-    int numele = rt->numele;
-    raxFree(rt);
-    return numele;
-}
-
-int getIndex(char c)
+static int getIndex(char c)
 {
     int i = c - 48;
     switch (i)
@@ -178,13 +140,60 @@ int getIndex(char c)
         break;
     }
 }
+static void splitFile(char *data)
+{
+    while (*data != 0x0)
+    {
+        int measurement;
+        char *old = data;
+        int len;
+        data = parse_number(&measurement, &len, data + 129);
+        char c = old[0];
+        int index = getIndex(c);
+        FILE *file = files[index];
+        fwrite(old, 128 + len +2, 1, file);
+    }
+}
+
+static int process()
+{
+    rax *rt = raxNew();
+    raxIterator iter;
+    raxStart(&iter, rt);
+
+    size_t sz;
+    char *data;
+
+    char *file = "/mnt/d/downloads/data1.txt";
+    int fd = openFile(file);
+    mapFile(fd, &data, &sz);
+    splitFile(data);
+    // doProcess(data, rt, &iter);
+    // cleanup(fd, data, sz);
+
+    // file = "/app/data/data2.txt";
+    // fd = openFile(file);
+    // mapFile(fd, &data, &sz);
+    // doProcess(data, rt, &iter);
+    // cleanup(fd, data, sz);
+
+    outputResult(&iter);
+
+    raxSeek(&iter, "$", (unsigned char *)NULL, 0);
+    raxPrev(&iter);
+    // memcpy(start, iter.key, 128);
+    raxStop(&iter);
+    int numele = rt->numele;
+    raxFree(rt);
+    return numele;
+}
+
 
 int main(int argc, char const *argv[])
 {
-    int result = mkdir("/home/larry/llll", 0700);
-    FILE *files[62];
-    unsigned char base[17] = "/home/larry/llll/";
-    unsigned char suffix[6] = ".txt";
+    int result = mkdir("/home/larry/llll", 0777);
+    char base[17] = "/home/larry/llll/";
+    char suffix[6] = ".txt";
     for (int i = 0; i < 62; i++)
     {
         char name[23];
@@ -195,9 +204,11 @@ int main(int argc, char const *argv[])
         if (file == NULL)
         {
             perror("error opening file");
+            printf("file name:%s\n", name);
             exit(EXIT_FAILURE);
         }
         files[i] = file;
     }
+    process();
     return 0;
 }
