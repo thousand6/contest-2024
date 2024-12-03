@@ -13,8 +13,9 @@
 #include "rax.h"
 #include "contest.h"
 
-#define MAX_KEY_CAPABILITY 800000
 #define BUF_LEN (1 << 10) * 64
+
+unsigned char c[62] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
@@ -73,44 +74,14 @@ static inline void cleanup(int fd, char *data, size_t sz)
     close(fd);
 }
 
-static void doProcess(char *start, char *data, rax *rt, raxIterator *iter)
+static void doProcess(char *data, rax *rt, raxIterator *iter)
 {
     while (*data != 0x0)
     {
         int measurement;
         char *old = data;
         data = parse_number(&measurement, data + 129);
-        char biggest[128];
-        if (rt->numele < MAX_KEY_CAPABILITY)
-        {
-            if (memcmp(start, old, 128) < 0)
-            {
-                raxInsertNum(rt, old, 128, measurement);
-            }
-            if (rt->numele == MAX_KEY_CAPABILITY)
-            {
-                raxSeek(iter, "$", (unsigned char *)NULL, 0);
-                raxPrev(iter);
-                memcpy(biggest, iter->key, 128);
-            }
-        }
-        else
-        {
-            if (memcmp(start, old, 128) < 0)
-            {
-                if (memcmp(biggest, old, 128) >= 0)
-                {
-                    raxInsertNum(rt, old, 128, measurement);
-                    if (rt->numele > MAX_KEY_CAPABILITY)
-                    {
-                        raxRemove(rt, biggest, 128, NULL);
-                        raxSeek(iter, "$", (unsigned char *)NULL, 0);
-                        raxPrev(iter);
-                        memcpy(biggest, iter->key, 128);
-                    }
-                }
-            }
-        }
+        raxInsertNum(rt, old, 128, measurement);
     }
 }
 
@@ -150,6 +121,16 @@ static void outputResult(raxIterator *iter)
     fclose(file);
 }
 
+static void splitFile(char *data)
+{
+    while (*data != 0x0)
+    {
+        int measurement;
+        char *old = data;
+        data = parse_number(&measurement, data + 129);
+    }
+}
+
 static int process(char *start)
 {
     rax *rt = raxNew();
@@ -162,13 +143,13 @@ static int process(char *start)
     char *file = "/app/data/data1.txt";
     int fd = openFile(file);
     mapFile(fd, &data, &sz);
-    doProcess(start, data, rt, &iter);
+    doProcess(data, rt, &iter);
     cleanup(fd, data, sz);
 
     file = "/app/data/data2.txt";
     fd = openFile(file);
     mapFile(fd, &data, &sz);
-    doProcess(start, data, rt, &iter);
+    doProcess(data, rt, &iter);
     cleanup(fd, data, sz);
 
     outputResult(&iter);
@@ -182,13 +163,41 @@ static int process(char *start)
     return numele;
 }
 
+int getIndex(char c)
+{
+    int i = c - 48;
+    switch (i)
+    {
+    case 0 ... 9:
+        return i;
+    case 17 ... 43:
+        return i - 7;
+    case 49 ... 74:
+        return i - 13;
+    default:
+        break;
+    }
+}
+
 int main(int argc, char const *argv[])
 {
-    char s[128];
-    memset(s, '0', 128);
-    while (!(process(s) < MAX_KEY_CAPABILITY))
+    int result = mkdir("/home/larry/llll", 0700);
+    FILE *files[62];
+    unsigned char base[17] = "/home/larry/llll/";
+    unsigned char suffix[6] = ".txt";
+    for (int i = 0; i < 62; i++)
     {
+        char name[23];
+        memcpy(name, &base, 17);
+        memset(name + 17, c[i], 1);
+        memcpy(name + 18, &suffix, 5);
+        FILE *file = fopen(name, "a");
+        if (file == NULL)
+        {
+            perror("error opening file");
+            exit(EXIT_FAILURE);
+        }
+        files[i] = file;
     }
-
     return 0;
 }
