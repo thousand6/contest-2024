@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
 #include "rax.h"
 #include "contest.h"
@@ -16,7 +17,7 @@
 #define BUF_LEN (1 << 10) * 64
 
 unsigned char c[62] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
-FILE *files[62];
+FileEntry files[62];
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
@@ -108,7 +109,7 @@ static int resultToBuf(char *buf, raxIterator *iter)
 
 static void outputResult(raxIterator *iter)
 {
-    FILE *file = fopen("/app/data/output-larry.txt", "a");
+    FILE *file = fopen("/mnt/d/output-larry.txt", "a");
     if (file == NULL)
     {
         perror("error opening file");
@@ -140,8 +141,14 @@ static int getIndex(char c)
         break;
     }
 }
-static void splitFile(char *data)
+
+static void *splitFile(void *file)
 {
+    size_t sz;
+    char *data;
+    int fd = openFile((char *)file);
+    mapFile(fd, &data, &sz);
+
     while (*data != 0x0)
     {
         int measurement;
@@ -150,65 +157,89 @@ static void splitFile(char *data)
         data = parse_number(&measurement, &len, data + 129);
         char c = old[0];
         int index = getIndex(c);
-        FILE *file = files[index];
-        fwrite(old, 128 + len +2, 1, file);
+        FILE *file = files[index].file;
+        fwrite(old, 128 + len + 2, 1, file);
+    }
+    cleanup(fd, data, sz);
+    return NULL;
+}
+
+static void processData(rax *rt, char *data)
+{
+    while (*data != 0x0)
+    {
+        int measurement;
+        char *old = data;
+        int len;
+        data = parse_number(&measurement, &len, data + 129);
+        raxInsertNum(rt, old, 128, measurement);
     }
 }
 
-static int process()
+static int process(char *file)
 {
+
     rax *rt = raxNew();
     raxIterator iter;
     raxStart(&iter, rt);
 
     size_t sz;
     char *data;
-
-    char *file = "/mnt/d/downloads/data1.txt";
-    int fd = openFile(file);
+    int fd = openFile((char *)file);
     mapFile(fd, &data, &sz);
-    splitFile(data);
-    // doProcess(data, rt, &iter);
-    // cleanup(fd, data, sz);
 
-    // file = "/app/data/data2.txt";
-    // fd = openFile(file);
-    // mapFile(fd, &data, &sz);
-    // doProcess(data, rt, &iter);
-    // cleanup(fd, data, sz);
+    processData(rt, data);
 
     outputResult(&iter);
-
-    raxSeek(&iter, "$", (unsigned char *)NULL, 0);
-    raxPrev(&iter);
-    // memcpy(start, iter.key, 128);
     raxStop(&iter);
     int numele = rt->numele;
     raxFree(rt);
     return numele;
 }
 
-
-int main(int argc, char const *argv[])
+void setup()
 {
-    int result = mkdir("/home/larry/llll", 0777);
-    char base[17] = "/home/larry/llll/";
-    char suffix[6] = ".txt";
+    mkdir("/tmp/larry", 0777);
+    char base[] = "/tmp/larry/";
+    char suffix[] = ".txt";
     for (int i = 0; i < 62; i++)
     {
-        char name[23];
-        memcpy(name, &base, 17);
-        memset(name + 17, c[i], 1);
-        memcpy(name + 18, &suffix, 5);
+        char name[16];
+        memcpy(name, &base, 10);
+        memset(name + 10, c[i], 1);
+        memcpy(name + 11, &suffix, 5);
         FILE *file = fopen(name, "a");
         if (file == NULL)
         {
             perror("error opening file");
-            printf("file name:%s\n", name);
             exit(EXIT_FAILURE);
         }
-        files[i] = file;
+        files[i].file = file;
+        files[i].name = malloc(23);
+        memcpy(files[i].name, &name[0], 16);
     }
-    process();
+}
+
+int main(int argc, char const *argv[])
+{
+    setup();
+
+    pthread_t thread[2];
+    pthread_create(&thread[0], NULL, splitFile, "/app/data/data1.txt");
+    pthread_create(&thread[1], NULL, splitFile, "/app/data/data2.txt");
+    pthread_join(thread[0], NULL);
+    pthread_join(thread[1], NULL);
+
+     for (size_t i = 0; i < 62; i++)
+    {
+        fflush(files[i].file);
+        fclose(files[i].file);
+    }
+
+    // for (size_t i = 0; i < 62; i++)
+    // {
+    //     process(files[i].name);
+    // }
+
     return 0;
 }

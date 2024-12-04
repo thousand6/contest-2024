@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <math.h>
 
 #include "rax.h"
 #include "contest.h"
@@ -59,6 +60,7 @@ static inline void mapFile(int fd, char **data, size_t *sz)
 
     // mmap entire file into memory
     *sz = (size_t)sb.st_size;
+    printf("file size is %ld\n",*sz);
     *data = mmap(NULL, *sz, PROT_READ, MAP_SHARED, fd, 0);
     if (*data == MAP_FAILED)
     {
@@ -120,7 +122,7 @@ static int resultToBuf(char *buf, raxIterator *iter)
     while (raxNext(iter))
     {
         int n = sprintf(buf, "%.*s:%.1f/%.1f/%.1f\n", (int)iter->key_len, (char *)iter->key, (float)((Group *)iter->data)->min / 10.0,
-                        (float)((Group *)iter->data)->sum / (float)((Group *)iter->data)->count / 10.0, (float)((Group *)iter->data)->max / 10.0);
+                        round((float)((Group *)iter->data)->sum / (float)((Group *)iter->data)->count) / 10.0, (float)((Group *)iter->data)->max / 10.0);
         len += n;
         buf += n;
         if (len + 200 >= BUF_LEN)
@@ -133,7 +135,7 @@ static int resultToBuf(char *buf, raxIterator *iter)
 
 static void outputResult(raxIterator *iter)
 {
-    FILE *file = fopen("/app/data/output-larry.txt", "a");
+    FILE *file = fopen("/mnt/d/output-larry.txt", "a");
     if (file == NULL)
     {
         perror("error opening file");
@@ -146,7 +148,7 @@ static void outputResult(raxIterator *iter)
     {
         fwrite(buf, len, 1, file);
     } while ((len = resultToBuf(buf, iter)));
-
+    fflush(file);
     fclose(file);
 }
 
@@ -171,7 +173,7 @@ static int process(char *start)
     doProcess(start, data, rt, &iter);
     cleanup(fd, data, sz);
 
-    outputResult(&iter);
+    // outputResult(&iter);
 
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);
@@ -186,9 +188,13 @@ int main(int argc, char const *argv[])
 {
     char s[128];
     memset(s, '0', 128);
-    while (!(process(s) < MAX_KEY_CAPABILITY))
+    int total, numele;
+    while (!((numele = process(s)) < MAX_KEY_CAPABILITY))
     {
+        total += numele;
     }
+    total += numele;
+    printf("total:%d\n", total);
 
     return 0;
 }
