@@ -14,26 +14,32 @@
 #include "rax.h"
 #include "contest.h"
 
-#define MAX_KEY_CAPABILITY 800000
+#define MAX_KEY_CAPABILITY 60
 #define BUF_LEN (1 << 10) * 64
+#define CHUNK_SIZE (1 << 10) * 16
+
+#define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
-static inline char *parse_number(int *dest, char *s)
+static inline char *parse_number(int *dest, int *len, char *s)
 {
     if (s[1] == '.')
     {
         *dest = s[0] * 10 + s[2] - ('0' * 11);
+        *len = 3;
         return s + 4;
     }
     if (s[2] == '.')
     {
         *dest = s[0] * 100 + s[1] * 10 + s[3] - ('0' * 111);
+        *len = 4;
         return s + 5;
     }
     if (s[3] == '.')
     {
         *dest = s[0] * 1000 + s[1] * 100 + s[2] * 10 + s[4] - ('0' * 1111);
+        *len = 5;
         return s + 6;
     }
 }
@@ -49,46 +55,24 @@ static inline int openFile(char *file)
     return fd;
 }
 
-static inline void mapFile(int fd, char **data, size_t *sz)
+static size_t doProcess(char *start, char *data, raxIterator *iter)
 {
-    struct stat sb;
-    if (fstat(fd, &sb) == -1)
-    {
-        perror("error getting file size");
-        exit(EXIT_FAILURE);
-    }
-
-    // mmap entire file into memory
-    *sz = (size_t)sb.st_size;
-    printf("file size is %ld\n",*sz);
-    *data = mmap(NULL, *sz, PROT_READ, MAP_SHARED, fd, 0);
-    if (*data == MAP_FAILED)
-    {
-        perror("error mmapping file");
-        exit(EXIT_FAILURE);
-    }
-}
-
-static inline void cleanup(int fd, char *data, size_t sz)
-{
-    munmap(data, sz);
-    close(fd);
-}
-
-static void doProcess(char *start, char *data, rax *rt, raxIterator *iter)
-{
+    rax *rt = iter->rt;
+    size_t offset = 0;
     while (*data != 0x0)
     {
         int measurement;
         char *old = data;
-        data = parse_number(&measurement, data + 129);
+        int len;
+        data = parse_number(&measurement, &len, data + 129);
         char biggest[128];
+        if (memcmp(start, old, 128) >= 0)
+        {
+            continue;
+        }
         if (rt->numele < MAX_KEY_CAPABILITY)
         {
-            if (memcmp(start, old, 128) < 0)
-            {
-                raxInsertNum(rt, old, 128, measurement);
-            }
+            raxInsertNum(rt, old, 128, measurement);
             if (rt->numele == MAX_KEY_CAPABILITY)
             {
                 raxSeek(iter, "$", (unsigned char *)NULL, 0);
@@ -98,7 +82,6 @@ static void doProcess(char *start, char *data, rax *rt, raxIterator *iter)
         }
         else
         {
-            if (memcmp(start, old, 128) < 0)
             {
                 if (memcmp(biggest, old, 128) >= 0)
                 {
@@ -113,8 +96,47 @@ static void doProcess(char *start, char *data, rax *rt, raxIterator *iter)
                 }
             }
         }
+        offset += len;
+        offset += 130;
+        if ((offset + PAGE_SIZE) > CHUNK_SIZE)
+        {
+            break;
+        }
     }
+    return offset;
 }
+
+static inline void mapFile(char *start, int fd, raxIterator *iter)
+{
+    struct stat sb;
+    if (fstat(fd, &sb) == -1)
+    {
+        perror("error getting file size");
+        exit(EXIT_FAILURE);
+    }
+    size_t size = (size_t)sb.st_size;
+    size_t offset = 0;
+    while ((offset + CHUNK_SIZE) < size)
+    {
+        char *data = mmap(NULL, CHUNK_SIZE, PROT_READ, MAP_SHARED, fd, offset);
+        if (data == MAP_FAILED)
+        {
+            perror("error mmapping file");
+            exit(EXIT_FAILURE);
+        }
+        offset += doProcess(start, data, iter);
+        munmap(data, CHUNK_SIZE);
+    }
+    close(fd);
+}
+
+static inline void cleanup(int fd, char *data, size_t sz)
+{
+    munmap(data, sz);
+    close(fd);
+}
+
+
 
 static int resultToBuf(char *buf, raxIterator *iter)
 {
@@ -135,7 +157,7 @@ static int resultToBuf(char *buf, raxIterator *iter)
 
 static void outputResult(raxIterator *iter)
 {
-    FILE *file = fopen("/mnt/d/output-larry.txt", "a");
+    FILE *file = fopen("/app/data/output-larry.txt", "a");
     if (file == NULL)
     {
         perror("error opening file");
@@ -161,23 +183,20 @@ static int process(char *start)
     size_t sz;
     char *data;
 
-    char *file = "/app/data/data1.txt";
+    char *file = "/mnt/d/data1.txt";
     int fd = openFile(file);
-    mapFile(fd, &data, &sz);
-    doProcess(start, data, rt, &iter);
-    cleanup(fd, data, sz);
+    mapFile(start, fd, &iter);
 
-    file = "/app/data/data2.txt";
-    fd = openFile(file);
-    mapFile(fd, &data, &sz);
-    doProcess(start, data, rt, &iter);
-    cleanup(fd, data, sz);
+    // file = "/app/data/data2.txt";
+    // fd = openFile(file);
+    // mapFile(start, fd, &iter);
 
     // outputResult(&iter);
 
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);
     memcpy(start, iter.key, 128);
+    printf("start is %s\n", start);
     raxStop(&iter);
     int numele = rt->numele;
     raxFree(rt);
@@ -187,7 +206,7 @@ static int process(char *start)
 int main(int argc, char const *argv[])
 {
     char s[128];
-    memset(s, '0', 128);
+    memset(s, 0, 128);
     int total, numele;
     while (!((numele = process(s)) < MAX_KEY_CAPABILITY))
     {
