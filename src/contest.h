@@ -14,6 +14,17 @@ typedef struct FileEntry
     char *name;
 } FileEntry;
 
+typedef struct FileMapContainer
+{
+    int fd;
+    size_t fileSize;
+    char array[150];
+    char *data;
+    off_t offset;
+    int chunkSize;
+} FileMapContainer;
+
+
 
 int max(int a, int b);
 int min(int a, int b);
