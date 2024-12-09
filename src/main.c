@@ -14,65 +14,55 @@
 #include "rax.h"
 #include "contest.h"
 
-#define MAX_KEY_CAPABILITY 60
+#define MAX_KEY_CAPABILITY 800
 #define BUF_LEN (1 << 10) * 64
 #define CHUNK_SIZE (1 << 10) * 16
 
-#define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
-
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
-static inline char *parse_number(int *dest, int *len, char *s)
+static inline void parse_number(int *dest, char *s)
 {
     if (s[1] == '.')
     {
         *dest = s[0] * 10 + s[2] - ('0' * 11);
-        *len = 3;
-        return s + 4;
     }
     if (s[2] == '.')
     {
         *dest = s[0] * 100 + s[1] * 10 + s[3] - ('0' * 111);
-        *len = 4;
-        return s + 5;
     }
     if (s[3] == '.')
     {
         *dest = s[0] * 1000 + s[1] * 100 + s[2] * 10 + s[4] - ('0' * 1111);
-        *len = 5;
-        return s + 6;
     }
 }
 
-static inline int openFile(char *file)
+static inline FILE *openFile(char *file)
 {
-    int fd = open(file, O_RDONLY);
-    if (!fd)
+    FILE *stream = fopen(file, "r");
+    if (file = NULL)
     {
         perror("error opening file");
         exit(EXIT_FAILURE);
     }
-    return fd;
+    return stream;
 }
 
-static size_t doProcess(char *start, char *data, raxIterator *iter)
+static void doProcess(char *start, FILE *file, raxIterator *iter)
 {
     rax *rt = iter->rt;
-    size_t offset = 0;
-    while (*data != 0x0)
+    char line[136];
+    while (fgets(line, 136, file) != NULL && line[0] != '\n' /*处理最后一个空行*/)
     {
         int measurement;
-        char *old = data;
-        int len;
-        data = parse_number(&measurement, &len, data + 129);
+        parse_number(&measurement, line + 129);
         char biggest[128];
-        if (memcmp(start, old, 128) >= 0)
+        if (memcmp(start, line, 128) >= 0)
         {
             continue;
         }
         if (rt->numele < MAX_KEY_CAPABILITY)
         {
-            raxInsertNum(rt, old, 128, measurement);
+            raxInsertNum(rt, line, 128, measurement);
             if (rt->numele == MAX_KEY_CAPABILITY)
             {
                 raxSeek(iter, "$", (unsigned char *)NULL, 0);
@@ -83,9 +73,9 @@ static size_t doProcess(char *start, char *data, raxIterator *iter)
         else
         {
             {
-                if (memcmp(biggest, old, 128) >= 0)
+                if (memcmp(biggest, line, 128) >= 0)
                 {
-                    raxInsertNum(rt, old, 128, measurement);
+                    raxInsertNum(rt, line, 128, measurement);
                     if (rt->numele > MAX_KEY_CAPABILITY)
                     {
                         raxRemove(rt, biggest, 128, NULL);
@@ -96,47 +86,9 @@ static size_t doProcess(char *start, char *data, raxIterator *iter)
                 }
             }
         }
-        offset += len;
-        offset += 130;
-        if ((offset + PAGE_SIZE) > CHUNK_SIZE)
-        {
-            break;
-        }
     }
-    return offset;
+    fclose(file);
 }
-
-static inline void mapFile(char *start, int fd, raxIterator *iter)
-{
-    struct stat sb;
-    if (fstat(fd, &sb) == -1)
-    {
-        perror("error getting file size");
-        exit(EXIT_FAILURE);
-    }
-    size_t size = (size_t)sb.st_size;
-    size_t offset = 0;
-    while ((offset + CHUNK_SIZE) < size)
-    {
-        char *data = mmap(NULL, CHUNK_SIZE, PROT_READ, MAP_SHARED, fd, offset);
-        if (data == MAP_FAILED)
-        {
-            perror("error mmapping file");
-            exit(EXIT_FAILURE);
-        }
-        offset += doProcess(start, data, iter);
-        munmap(data, CHUNK_SIZE);
-    }
-    close(fd);
-}
-
-static inline void cleanup(int fd, char *data, size_t sz)
-{
-    munmap(data, sz);
-    close(fd);
-}
-
-
 
 static int resultToBuf(char *buf, raxIterator *iter)
 {
@@ -157,7 +109,7 @@ static int resultToBuf(char *buf, raxIterator *iter)
 
 static void outputResult(raxIterator *iter)
 {
-    FILE *file = fopen("/app/data/output-larry.txt", "a");
+    FILE *file = fopen("/mnt/d/output-larry.txt", "a");
     if (file == NULL)
     {
         perror("error opening file");
@@ -183,20 +135,20 @@ static int process(char *start)
     size_t sz;
     char *data;
 
-    char *file = "/mnt/d/data1.txt";
-    int fd = openFile(file);
-    mapFile(start, fd, &iter);
+    char *file = "/mnt/d/downloads/data1.txt";
+    FILE *stream = openFile(file);
+    doProcess(start, stream, &iter);
 
     // file = "/app/data/data2.txt";
     // fd = openFile(file);
     // mapFile(start, fd, &iter);
 
-    // outputResult(&iter);
+    outputResult(&iter);
 
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);
     memcpy(start, iter.key, 128);
-    printf("start is %s\n", start);
+    printf("start is %.*s\n", 128, start);
     raxStop(&iter);
     int numele = rt->numele;
     raxFree(rt);
