@@ -143,9 +143,9 @@ static int process(char *start)
 
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);
-    printf("start before is %.*s\n", 128, start);
+    // printf("start before is %.*s\n", 128, start);
     memcpy(start, iter.key, 128);
-    printf("start after is %.*s\n", 128, start);
+    // printf("start after is %.*s\n", 128, start);
     raxStop(&iter);
     int numele = rt->numele;
     raxFree(rt);

@@ -13,7 +13,7 @@
 #include "rax.h"
 #include "contest.h"
 
-#define MAX_KEY_CAPABILITY 50
+#define MAX_KEY_CAPABILITY 530000
 #define BUF_LEN (1 << 10) * 16
 
 // 把浮点数解析成int，加快后续计算。
