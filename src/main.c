@@ -61,7 +61,7 @@ static void doProcess(char *start, FILE *file, raxIterator *iter)
         }
         if (rt->numele < MAX_KEY_CAPABILITY)
         {
-            raxInsertNum(rt, line, 128, measurement);
+            raxInsert(rt, line, 128, NULL, NULL);
             if (rt->numele == MAX_KEY_CAPABILITY)
             {
                 raxSeek(iter, "$", (unsigned char *)NULL, 0);
@@ -74,7 +74,7 @@ static void doProcess(char *start, FILE *file, raxIterator *iter)
             {
                 if (memcmp(biggest, line, 128) >= 0)
                 {
-                    raxInsertNum(rt, line, 128, measurement);
+                    raxInsert(rt, line, 128, NULL, NULL);
                     if (rt->numele > MAX_KEY_CAPABILITY)
                     {
                         raxRemove(rt, biggest, 128, NULL);
@@ -139,7 +139,7 @@ static int process(char *start)
     stream = openFile(file);
     doProcess(start, stream, &iter);
 
-    outputResult(&iter);
+    // outputResult(&iter);
 
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);

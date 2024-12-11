@@ -195,6 +195,8 @@ extern void *raxNotFound;
 
 /* Exported API. */
 rax *raxNew(void);
+int raxInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old);
+int raxTryInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old);
 /* 自定义的函数，这里的len都是128，所以可以对原先的代码进行精简 */
 int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num);
 int raxRemove(rax *rax, unsigned char *s, size_t len, void **old);
