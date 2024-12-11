@@ -845,19 +845,8 @@ int raxInsertNum(rax *rax, unsigned char *s, size_t len, int num) {
     return 1; /* Element inserted. */
 
 oom:
-    /* This code path handles out of memory after part of the sub-tree was
-     * already modified. Set the node as a key, and then remove it. However we
-     * do that only if the node is a terminal node, otherwise if the OOM
-     * happened reallocating a node in the middle, we don't need to free
-     * anything. */
-    if (h->size == 0) {
-        h->isnull = 1;
-        h->iskey = 1;
-        rax->numele++; /* Compensate the next remove. */
-        assert(raxRemove(rax,s,i,NULL) != 0);
-    }
-    errno = ENOMEM;
-    return 0;
+    perror("oom");
+    exit(EXIT_FAILURE);
 }
 
 

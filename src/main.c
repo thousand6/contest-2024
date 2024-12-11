@@ -14,9 +14,8 @@
 #include "rax.h"
 #include "contest.h"
 
-#define MAX_KEY_CAPABILITY 800
+#define MAX_KEY_CAPABILITY 703000
 #define BUF_LEN (1 << 10) * 64
-#define CHUNK_SIZE (1 << 10) * 16
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
@@ -109,7 +108,7 @@ static int resultToBuf(char *buf, raxIterator *iter)
 
 static void outputResult(raxIterator *iter)
 {
-    FILE *file = fopen("/mnt/d/output-larry.txt", "a");
+    FILE *file = fopen("/app/data/output-larry.txt", "a");
     if (file == NULL)
     {
         perror("error opening file");
@@ -132,23 +131,21 @@ static int process(char *start)
     raxIterator iter;
     raxStart(&iter, rt);
 
-    size_t sz;
-    char *data;
-
-    char *file = "/mnt/d/downloads/data1.txt";
+    char *file = "/app/data/data1.txt";
     FILE *stream = openFile(file);
     doProcess(start, stream, &iter);
 
-    // file = "/app/data/data2.txt";
-    // fd = openFile(file);
-    // mapFile(start, fd, &iter);
+    file = "/app/data/data2.txt";
+    stream = openFile(file);
+    doProcess(start, stream, &iter);
 
     outputResult(&iter);
 
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);
+    printf("start before is %.*s\n", 128, start);
     memcpy(start, iter.key, 128);
-    printf("start is %.*s\n", 128, start);
+    printf("start after is %.*s\n", 128, start);
     raxStop(&iter);
     int numele = rt->numele;
     raxFree(rt);
@@ -159,7 +156,7 @@ int main(int argc, char const *argv[])
 {
     char s[128];
     memset(s, 0, 128);
-    int total, numele;
+    int total = 0, numele;
     while (!((numele = process(s)) < MAX_KEY_CAPABILITY))
     {
         total += numele;
