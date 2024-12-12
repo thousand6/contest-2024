@@ -13,28 +13,25 @@
 #include "rax.h"
 #include "contest.h"
 
-#define MAX_KEY_CAPABILITY 530000
+#define MAX_KEY_CAPABILITY 53
 #define BUF_LEN (1 << 10) * 16
-#define BLOCK_SIZE (1 << 10) * (1 << 10) * 10
+#define BLOCK_SIZE (1 << 10) * 4
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
-static inline char *parse_number(int *dest, char *s)
+static inline void *parse_number(int *dest, char *s)
 {
     if (s[1] == '.')
     {
         *dest = s[0] * 10 + s[2] - ('0' * 11);
-        return s + 4;
     }
     if (s[2] == '.')
     {
         *dest = s[0] * 100 + s[1] * 10 + s[3] - ('0' * 111);
-        return s + 5;
     }
     if (s[3] == '.')
     {
         *dest = s[0] * 1000 + s[1] * 100 + s[2] * 10 + s[4] - ('0' * 1111);
-        return s + 6;
     }
 }
 
@@ -87,7 +84,7 @@ static int mapFile(FileMapContainer *container)
         while (container->array[j++] != 0)
         {
         }
-        memcpy(container->array + j, old, i);
+        memcpy(container->array + j - 1, old, i);
     }
     container->data = data;
     return 1;
@@ -99,20 +96,17 @@ static inline void cleanup(int fd, char *data, size_t sz)
     close(fd);
 }
 
-static void putTree(char *start, raxIterator *iter, char *line)
+static void putTree(char *start, raxIterator *iter, char *line, char *biggest)
 {
     rax *rt = iter->rt;
-
     int measurement;
     parse_number(&measurement, line + 129);
-    char biggest[128];
     if (memcmp(start, line, 128) >= 0)
     {
         return;
     }
     if (rt->numele < MAX_KEY_CAPABILITY)
     {
-        // raxInsert(rt, line, 128, NULL, NULL);
         raxInsertNum(rt, line, measurement);
         if (rt->numele == MAX_KEY_CAPABILITY)
         {
@@ -120,70 +114,56 @@ static void putTree(char *start, raxIterator *iter, char *line)
             raxPrev(iter);
             memcpy(biggest, iter->key, 128);
         }
+        return;
     }
-    else
+
     {
+        if (memcmp(biggest, line, 128) >= 0)
         {
-            if (memcmp(biggest, line, 128) >= 0)
+            raxInsertNum(rt, line, measurement);
+            if (rt->numele > MAX_KEY_CAPABILITY)
             {
-                raxInsertNum(rt, line, measurement);
-                // raxInsert(rt, line, 128, NULL, NULL);
-                if (rt->numele > MAX_KEY_CAPABILITY)
-                {
-                    raxRemove(rt, biggest, NULL);
-                    raxSeek(iter, "$", (unsigned char *)NULL, 0);
-                    raxPrev(iter);
-                    memcpy(biggest, iter->key, 128);
-                }
+                raxRemove(rt, biggest, NULL);
+                raxSeek(iter, "$", (unsigned char *)NULL, 0);
+                raxPrev(iter);
+                memcpy(biggest, iter->key, 128);
             }
         }
     }
 }
 
-static void doProcess(char *start, char *data, rax *rt, raxIterator *iter, int fd)
+static void doProcess(char *start, raxIterator *iter, int fd)
 {
     FileMapContainer *container = newContainer(fd);
+    char biggest[128];
     while (1)
     {
         if (!mapFile(container))
         {
             break;
         }
-    }
-
-    {
-        int measurement;
-        char *old = data;
-        data = parse_number(&measurement, data + 129);
-        char biggest[128];
-        if (rt->numele < MAX_KEY_CAPABILITY)
+        if (container->array[0] != 0)
         {
-            if (memcmp(start, old, 128) < 0)
-            {
-                raxInsert(rt, old, 128, NULL, NULL);
-            }
-            if (rt->numele == MAX_KEY_CAPABILITY)
-            {
-                raxSeek(iter, "$", (unsigned char *)NULL, 0);
-                raxPrev(iter);
-                memcpy(biggest, iter->key, 128);
-            }
+            putTree(start, iter, container->array, biggest);
+            memset(container->array, 0, 150);
         }
-        else
+        int i = 0, j = 0;
+        while (1)
         {
-            if (memcmp(start, old, 128) < 0)
+            while (*(container->data + i++) != 0x0 && *(container->data + j++) != '\n')
             {
-                if (memcmp(biggest, old, 128) >= 0)
-                {
-                    raxInsert(rt, old, 128, NULL, NULL);
-                    if (rt->numele > MAX_KEY_CAPABILITY)
-                    {
-                        raxRemove(rt, biggest, 128, NULL);
-                        raxSeek(iter, "$", (unsigned char *)NULL, 0);
-                        raxPrev(iter);
-                        memcpy(biggest, iter->key, 128);
-                    }
-                }
+            }
+            if (i == j)
+            {
+                putTree(start, iter, container->data, biggest);
+                container->data += i;
+                i = 0;
+                j = 0;
+            }
+            else
+            {
+                memcpy(container->array, container->data, j);
+                break;
             }
         }
     }
@@ -226,20 +206,16 @@ static int process(char *start)
     raxIterator iter;
     raxStart(&iter, rt);
 
-    size_t sz;
-    char *data;
-
-    char *file = "/app/data/data1.txt";
+    char *file = "/mnt/d/downloads/data1.txt";
     int fd = openFile(file);
-    mapFile(fd, &data, &sz);
-    doProcess(start, data, rt, &iter);
-    cleanup(fd, data, sz);
+    doProcess(start, &iter, fd);
+    // cleanup(fd, data, sz);
 
-    file = "/app/data/data2.txt";
-    fd = openFile(file);
-    mapFile(fd, &data, &sz);
-    doProcess(start, data, rt, &iter);
-    cleanup(fd, data, sz);
+    // file = "/app/data/data2.txt";
+    // fd = openFile(file);
+    // mapFile(fd, &data, &sz);
+    // doProcess(start, data, rt, &iter);
+    // cleanup(fd, data, sz);
     // outputResult(&iter);
 
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);

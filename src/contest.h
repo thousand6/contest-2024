@@ -21,7 +21,6 @@ typedef struct FileMapContainer
     char array[150];
     char *data;
     off_t offset;
-    int chunkSize;
 } FileMapContainer;
 
 
