@@ -15,7 +15,7 @@
 
 #define MAX_KEY_CAPABILITY 53
 #define BUF_LEN (1 << 10) * 16
-#define BLOCK_SIZE (1 << 10) * 4
+#define BLOCK_SIZE (1 << 10) * 8
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
@@ -71,6 +71,8 @@ static int mapFile(FileMapContainer *container)
     size_t map_size = (container->fileSize - container->offset) < BLOCK_SIZE ? (container->fileSize - container->offset) : BLOCK_SIZE;
     char *data = mmap(NULL, map_size, PROT_READ, MAP_SHARED, container->fd, container->offset);
     container->offset += map_size;
+    container->origin = data;
+    container->mapSize = map_size;
     if (container->array[0] != 0)
     {
         char *old = data;
@@ -84,7 +86,7 @@ static int mapFile(FileMapContainer *container)
         while (container->array[j++] != 0)
         {
         }
-        memcpy(container->array + j - 1, old, i);
+        memcpy(container->array + j - 1, old, i+1);
     }
     container->data = data;
     return 1;
@@ -166,6 +168,7 @@ static void doProcess(char *start, raxIterator *iter, int fd)
                 break;
             }
         }
+        munmap(container->origin, container->mapSize);
     }
 }
 
