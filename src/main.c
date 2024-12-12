@@ -14,7 +14,7 @@
 #include "rax.h"
 #include "contest.h"
 
-#define MAX_KEY_CAPABILITY 703000
+#define MAX_KEY_CAPABILITY 600000
 #define BUF_LEN (1 << 10) * 64
 
 // 把浮点数解析成int，加快后续计算。
@@ -61,7 +61,8 @@ static void doProcess(char *start, FILE *file, raxIterator *iter)
         }
         if (rt->numele < MAX_KEY_CAPABILITY)
         {
-            raxInsert(rt, line, 128, NULL, NULL);
+            // raxInsert(rt, line, 128, NULL, NULL);
+            raxInsertNum(rt, line, measurement);
             if (rt->numele == MAX_KEY_CAPABILITY)
             {
                 raxSeek(iter, "$", (unsigned char *)NULL, 0);
@@ -74,10 +75,11 @@ static void doProcess(char *start, FILE *file, raxIterator *iter)
             {
                 if (memcmp(biggest, line, 128) >= 0)
                 {
-                    raxInsert(rt, line, 128, NULL, NULL);
+                    raxInsertNum(rt, line, measurement);
+                    // raxInsert(rt, line, 128, NULL, NULL);
                     if (rt->numele > MAX_KEY_CAPABILITY)
                     {
-                        raxRemove(rt, biggest, 128, NULL);
+                        raxRemove(rt, biggest, NULL);
                         raxSeek(iter, "$", (unsigned char *)NULL, 0);
                         raxPrev(iter);
                         memcpy(biggest, iter->key, 128);
@@ -135,17 +137,16 @@ static int process(char *start)
     FILE *stream = openFile(file);
     doProcess(start, stream, &iter);
 
-    file = "/app/data/data2.txt";
-    stream = openFile(file);
-    doProcess(start, stream, &iter);
+    // file = "/app/data/data2.txt";
+    // stream = openFile(file);
+    // doProcess(start, stream, &iter);
 
     // outputResult(&iter);
 
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);
-    // printf("start before is %.*s\n", 128, start);
     memcpy(start, iter.key, 128);
-    // printf("start after is %.*s\n", 128, start);
+    printf("start after is %.*s\n", 128, start);
     raxStop(&iter);
     int numele = rt->numele;
     raxFree(rt);
