@@ -15,7 +15,7 @@
 
 #define MAX_KEY_CAPABILITY 53
 #define BUF_LEN (1 << 10) * 16
-#define BLOCK_SIZE (1 << 10) * 8
+#define BLOCK_SIZE (1 << 10) * 4
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
@@ -59,6 +59,7 @@ static FileMapContainer *newContainer(int fd)
     }
     c->fileSize = (size_t)sb.st_size;
     c->offset = 0;
+    c->mapSize = 0;
 }
 
 static int mapFile(FileMapContainer *container)
@@ -77,8 +78,7 @@ static int mapFile(FileMapContainer *container)
     {
         char *old = data;
         int i = 0;
-        char c;
-        while ((c = *data++) != 0x0 && c != '\n')
+        while (*(data++) != '\n')
         {
             i++;
         }
@@ -86,7 +86,7 @@ static int mapFile(FileMapContainer *container)
         while (container->array[j++] != 0)
         {
         }
-        memcpy(container->array + j - 1, old, i + 1);
+        memcpy(container->array + j - 1, old, i);
     }
     container->data = data;
     return 1;
@@ -109,7 +109,7 @@ static void putTree(char *start, raxIterator *iter, char *line, char *biggest)
     }
     if (rt->numele < MAX_KEY_CAPABILITY)
     {
-        raxInsertNum(rt, line, measurement);
+        raxInsert(rt, line, 128, NULL, NULL);
         if (rt->numele == MAX_KEY_CAPABILITY)
         {
             raxSeek(iter, "$", (unsigned char *)NULL, 0);
@@ -122,10 +122,11 @@ static void putTree(char *start, raxIterator *iter, char *line, char *biggest)
     {
         if (memcmp(biggest, line, 128) >= 0)
         {
-            raxInsertNum(rt, line, measurement);
+            // raxInsertNum(rt, line, measurement);
+            raxInsert(rt, line, 128, NULL, NULL);
             if (rt->numele > MAX_KEY_CAPABILITY)
             {
-                raxRemove(rt, biggest, NULL);
+                raxRemove(rt, biggest, 128, NULL);
                 raxSeek(iter, "$", (unsigned char *)NULL, 0);
                 raxPrev(iter);
                 memcpy(biggest, iter->key, 128);
@@ -149,25 +150,20 @@ static void doProcess(char *start, raxIterator *iter, int fd)
             putTree(start, iter, container->array, biggest);
             memset(container->array, 0, 150);
         }
-        int i = 0, j = 0;
+        int i = 0, k = 0;
         while (1)
         {
-            while (*(container->data + i++) != 0x0 && *(container->data + j++) != '\n')
+            while (++k < container->mapSize && *(container->data + i++) != '\n')
             {
             }
-            if (i == j)
+            if (k < container->mapSize)
             {
                 putTree(start, iter, container->data, biggest);
                 container->data += i;
                 i = 0;
-                j = 0;
                 continue;
             }
-            if (i == 1)
-            {
-                break;
-            }
-            memcpy(container->array, container->data, j);
+            memcpy(container->array, container->data, i + 1);
             break;
         }
         munmap(container->origin, container->mapSize);
@@ -211,7 +207,7 @@ static int process(char *start)
     raxIterator iter;
     raxStart(&iter, rt);
 
-    char *file = "/mnt/d/downloads/data1.txt";
+    char *file = "/mnt/d/data1.txt";
     int fd = openFile(file);
     doProcess(start, &iter, fd);
     // cleanup(fd, data, sz);
