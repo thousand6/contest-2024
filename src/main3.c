@@ -86,7 +86,7 @@ static int mapFile(FileMapContainer *container)
         while (container->array[j++] != 0)
         {
         }
-        memcpy(container->array + j - 1, old, i+1);
+        memcpy(container->array + j - 1, old, i + 1);
     }
     container->data = data;
     return 1;
@@ -161,12 +161,14 @@ static void doProcess(char *start, raxIterator *iter, int fd)
                 container->data += i;
                 i = 0;
                 j = 0;
+                continue;
             }
-            else
+            if (i == 1)
             {
-                memcpy(container->array, container->data, j);
                 break;
             }
+            memcpy(container->array, container->data, j);
+            break;
         }
         munmap(container->origin, container->mapSize);
     }
