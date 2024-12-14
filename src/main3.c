@@ -9,13 +9,26 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <math.h>
 
 #include "rax.h"
 #include "contest.h"
 
 #define MAX_KEY_CAPABILITY 53
-#define BUF_LEN (1 << 10) * 16
-#define BLOCK_SIZE (1 << 10) * 4
+#define BUF_LEN (1 << 10) * 32
+#define BLOCK_SIZE (1 << 10) * 64
+
+typedef struct FileMapContainer
+{
+    int fd;
+    size_t fileSize;
+    char boundary[150];
+    char *data;
+    off_t offset;
+    size_t dataLength;
+    size_t mapSize;
+    char *origin;
+} FileMapContainer;
 
 // 把浮点数解析成int，加快后续计算。
 // ASCII表中，代表数字的字符的int值比所代表的数字本身要大，所以需要减掉相应的差值。
@@ -46,11 +59,17 @@ static inline int openFile(char *file)
     return fd;
 }
 
+static inline void initBoundary(char boundary[150])
+{
+    memset(boundary, 0, 150);
+}
+
 static FileMapContainer *newContainer(int fd)
 {
     FileMapContainer *c = malloc(sizeof(FileMapContainer));
     c->fd = fd;
-    memset(c->array, 0, 150);
+    // memset(c->boundary, 0, 150);
+    initBoundary(c->boundary);
     struct stat sb;
     if (fstat(fd, &sb) == -1)
     {
@@ -59,7 +78,7 @@ static FileMapContainer *newContainer(int fd)
     }
     c->fileSize = (size_t)sb.st_size;
     c->offset = 0;
-    c->mapSize = 0;
+    c->dataLength = 0;
 }
 
 static int mapFile(FileMapContainer *container)
@@ -73,8 +92,9 @@ static int mapFile(FileMapContainer *container)
     char *data = mmap(NULL, map_size, PROT_READ, MAP_SHARED, container->fd, container->offset);
     container->offset += map_size;
     container->origin = data;
+    container->dataLength = map_size;
     container->mapSize = map_size;
-    if (container->array[0] != 0)
+    if (container->boundary[0] != 0)
     {
         char *old = data;
         int i = 0;
@@ -82,11 +102,12 @@ static int mapFile(FileMapContainer *container)
         {
             i++;
         }
+        container->dataLength -= ++i;
         int j = 0;
-        while (container->array[j++] != 0)
+        while (container->boundary[j++] != 0)
         {
         }
-        memcpy(container->array + j - 1, old, i);
+        memcpy(container->boundary + j - 1, old, i);
     }
     container->data = data;
     return 1;
@@ -109,7 +130,8 @@ static void putTree(char *start, raxIterator *iter, char *line, char *biggest)
     }
     if (rt->numele < MAX_KEY_CAPABILITY)
     {
-        raxInsert(rt, line, 128, NULL, NULL);
+        // raxInsert(rt, line, 128, NULL, NULL);
+        raxInsertNum(rt, line, measurement);
         if (rt->numele == MAX_KEY_CAPABILITY)
         {
             raxSeek(iter, "$", (unsigned char *)NULL, 0);
@@ -122,11 +144,11 @@ static void putTree(char *start, raxIterator *iter, char *line, char *biggest)
     {
         if (memcmp(biggest, line, 128) >= 0)
         {
-            // raxInsertNum(rt, line, measurement);
-            raxInsert(rt, line, 128, NULL, NULL);
+            raxInsertNum(rt, line, measurement);
+            // raxInsert(rt, line, 128, NULL, NULL);
             if (rt->numele > MAX_KEY_CAPABILITY)
             {
-                raxRemove(rt, biggest, 128, NULL);
+                raxRemove128(rt, biggest, NULL);
                 raxSeek(iter, "$", (unsigned char *)NULL, 0);
                 raxPrev(iter);
                 memcpy(biggest, iter->key, 128);
@@ -145,25 +167,26 @@ static void doProcess(char *start, raxIterator *iter, int fd)
         {
             break;
         }
-        if (container->array[0] != 0)
+        if (container->boundary[0] != 0)
         {
-            putTree(start, iter, container->array, biggest);
-            memset(container->array, 0, 150);
+            putTree(start, iter, container->boundary, biggest);
+            // memset(container->boundary, 0, 150);
+            initBoundary(container->boundary);
         }
         int i = 0, k = 0;
         while (1)
         {
-            while (++k < container->mapSize && *(container->data + i++) != '\n')
+            while (k++ < container->dataLength && *(container->data + i++) != '\n')
             {
             }
-            if (k < container->mapSize)
+            if (k <= container->dataLength)
             {
                 putTree(start, iter, container->data, biggest);
                 container->data += i;
                 i = 0;
                 continue;
             }
-            memcpy(container->array, container->data, i + 1);
+            memcpy(container->boundary, container->data, i);
             break;
         }
         munmap(container->origin, container->mapSize);
@@ -175,8 +198,8 @@ static int resultToBuf(char *buf, raxIterator *iter)
     int len = 0;
     while (raxNext(iter))
     {
-        int n = sprintf(buf, "%.*s:%.1f/%.1f/%.1f\n", (int)iter->key_len, (char *)iter->key, (float)((Group *)iter->data)->min / 10.0,
-                        (float)((Group *)iter->data)->sum / (float)((Group *)iter->data)->count / 10.0, (float)((Group *)iter->data)->max / 10.0);
+        int n = sprintf(buf, "%.*s:%.1f/%.1f/%.1f\n", 128, (char *)iter->key, (float)((Group *)iter->data)->min / 10.0,
+                        round((float)((Group *)iter->data)->sum / (float)((Group *)iter->data)->count) / 10.0, (float)((Group *)iter->data)->max / 10.0);
         len += n;
         buf += n;
         if (len + 200 >= BUF_LEN)
@@ -217,7 +240,7 @@ static int process(char *start)
     // mapFile(fd, &data, &sz);
     // doProcess(start, data, rt, &iter);
     // cleanup(fd, data, sz);
-    // outputResult(&iter);
+    outputResult(&iter);
 
     raxSeek(&iter, "$", (unsigned char *)NULL, 0);
     raxPrev(&iter);

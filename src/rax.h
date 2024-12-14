@@ -200,6 +200,7 @@ int raxTryInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old)
 /* 自定义的函数，这里的len都是128，所以可以对原先的代码进行精简 */
 int raxInsertNum(rax *rax, unsigned char *s, int num);
 int raxRemove(rax *rax, unsigned char *s, size_t len, void **old);
+int raxRemove128(rax *rax, unsigned char *s, void **old);
 void raxFree(rax *rax);
 void raxFreeWithCallback(rax *rax, void (*free_callback)(void*));
 void raxStart(raxIterator *it, rax *rt);

@@ -1,5 +1,5 @@
-#include<stdio.h>
-#include <fcntl.h>
+#ifndef CONTEST_H
+#define CONTEST_H
 
 typedef struct Group
 {
@@ -9,25 +9,8 @@ typedef struct Group
     int count;
 } Group;
 
-typedef struct FileEntry
-{
-    FILE *file;
-    char *name;
-} FileEntry;
-
-typedef struct FileMapContainer
-{
-    int fd;
-    size_t fileSize;
-    char array[150];
-    char *data;
-    off_t offset;
-    size_t mapSize;
-    char *origin;
-} FileMapContainer;
-
-
-
 
 int max(int a, int b);
 int min(int a, int b);
+
+#endif

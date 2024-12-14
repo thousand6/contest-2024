@@ -79,7 +79,7 @@ static void doProcess(char *start, FILE *file, raxIterator *iter)
                     // raxInsert(rt, line, 128, NULL, NULL);
                     if (rt->numele > MAX_KEY_CAPABILITY)
                     {
-                        raxRemove(rt, biggest, NULL);
+                        raxRemove128(rt, biggest, NULL);
                         raxSeek(iter, "$", (unsigned char *)NULL, 0);
                         raxPrev(iter);
                         memcpy(biggest, iter->key, 128);

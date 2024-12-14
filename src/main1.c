@@ -16,6 +16,12 @@
 
 #define BUF_LEN (1 << 10) * 64
 
+typedef struct FileEntry
+{
+    FILE *file;
+    char *name;
+} FileEntry;
+
 unsigned char c[62] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
 FileEntry files[62];
 
@@ -172,7 +178,7 @@ static void processData(rax *rt, char *data)
         char *old = data;
         int len;
         data = parse_number(&measurement, &len, data + 129);
-        raxInsertNum(rt, old, 128, measurement);
+        raxInsertNum(rt, old, measurement);
     }
 }
 
